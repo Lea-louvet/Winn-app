@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ── Tokens ───────────────────────────────────────────────────────
 const T = {
@@ -452,7 +452,7 @@ function Onboarding({ onDone }) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────
-export default function App() {
+export default function Winn() {
   const load = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? fb; } catch { return fb; } };
 
   const [onboarded, setOnboarded] = useState(() => load('w8_on', false));
@@ -608,8 +608,7 @@ Réponds UNIQUEMENT en JSON valide sans backticks :
     if (!setupName.trim()) return;
     const initials = setupName.trim().split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
     setProfile({ name: setupName.trim(), bio: setupBio.trim(), avatar: initials });
-    toast_('Profil créé ✦');
-    setCercleSub('profil');
+    toast_('Bienvenue sur Winn. ✦');
   };
 
   const callPortrait = async () => {
@@ -682,6 +681,43 @@ Réponds UNIQUEMENT en JSON valide sans backticks :
   const transformCount = entries.filter(e => e.type === "transform").length;
 
   if (!onboarded) return <Onboarding onDone={() => setOnboarded(true)} />;
+  if (!profile) return (
+    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px" }}>
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 32, color: T.text, letterSpacing: "-.5px" }}>
+            Winn<span style={{ color: T.accent }}>.</span>
+          </div>
+          <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Crée ton profil pour commencer</div>
+        </div>
+
+        {/* Avatar preview */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: T.accentBg, border: `2px solid ${T.accentSoft}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, color: T.accent }}>
+            {setupName.trim() ? setupName.trim().split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2) : "✦"}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.mid, letterSpacing: ".04em", marginBottom: 8 }}>TON PRÉNOM / PSEUDO</div>
+        <input type="text" placeholder="Ex : Sophie M." value={setupName} onChange={e => setSetupName(e.target.value)}
+          style={{ marginBottom: 16, borderRadius: 14, padding: "13px 15px", height: "auto" }}
+          onKeyDown={e => { if (e.key === "Enter" && setupName.trim()) createProfile(); }} />
+
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.mid, letterSpacing: ".04em", marginBottom: 8 }}>BIO COURTE <span style={{ color: T.muted, fontWeight: 400 }}>(optionnelle)</span></div>
+        <textarea rows={3} placeholder="En chemin vers une meilleure version de moi." value={setupBio}
+          onChange={e => setSetupBio(e.target.value)} style={{ marginBottom: 28 }} />
+
+        <button className="btn btn-dark" onClick={createProfile} style={{ width: "100%", padding: "16px", fontSize: 16 }} disabled={!setupName.trim()}>
+          Commencer ✦
+        </button>
+
+        <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginTop: 16, lineHeight: 1.6 }}>
+          Ton profil reste privé par défaut.<br />Tu choisis ce que tu partages.
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -1072,8 +1108,31 @@ Réponds UNIQUEMENT en JSON valide sans backticks :
                       const matchSearch = !historySearch.trim() || e.text.toLowerCase().includes(historySearch.toLowerCase()) || (e.original||'').toLowerCase().includes(historySearch.toLowerCase());
                       return matchType && matchSearch;
                     });
+                    const isEmpty = entries.length === 0;
                     return filtered.length === 0
-                      ? <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>Aucun résultat</div>
+                      ? (
+                        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: "36px 22px", textAlign: "center" }}>
+                          {isEmpty ? (
+                            <>
+                              <div style={{ fontSize: 28, marginBottom: 12, color: T.muted }}>📖</div>
+                              <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 17, marginBottom: 8 }}>
+                                Ton journal t'attend
+                              </div>
+                              <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, marginBottom: 18 }}>
+                                Chaque entrée que tu ajoutes<br />apparaîtra ici. Commence dès maintenant.
+                              </div>
+                              <button className="btn btn-dark" onClick={() => { setTab("add"); setTimeout(() => textRef.current?.focus(), 100); }} style={{ padding: "12px 24px", fontSize: 14 }}>
+                                + Mon premier succès
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 22, marginBottom: 8, color: T.muted }}>◎</div>
+                              <div style={{ fontSize: 14, color: T.muted }}>Aucun résultat pour cette recherche</div>
+                            </>
+                          )}
+                        </div>
+                      )
                       : <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                           {filtered.map(e => <EntryCard key={e.id} e={e} showToggle onToggle={id => setEntries(prev => prev.map(e => e.id===id ? {...e,isPublic:!e.isPublic} : e))} />)}
                         </div>;
