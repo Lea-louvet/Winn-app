@@ -120,22 +120,11 @@ const OB_SLIDES = [
   },
 ];
 
-const DEMO_FEED = [
-  { id: "f1", author: "Marie L.", avatar: "ML", color: T.rose, level: "Confirmée",
-    type: "success", text: "J'ai terminé ma formation après 3 mois d'effort continu. Je ne pensais pas tenir.", date: "Aujourd'hui",
-    reactions: { strength: 4, spark: 7, heart: 2 }, comments: [] },
-  { id: "f2", author: "Thomas R.", avatar: "TR", color: T.blue, level: "Pratiquant",
-    type: "transform", original: "J'ai raté une présentation importante devant toute l'équipe.",
-    text: "Cet échec m'a montré que je plaçais ma valeur dans le regard des autres. Maintenant je travaille pour moi.", date: "Hier",
-    reactions: { strength: 9, spark: 3, heart: 11 }, comments: [] },
-  { id: "f3", author: "Léa M.", avatar: "LM", color: T.violet, level: "Expert·e",
-    type: "success", text: "Premier 10 km sans m'arrêter. Six mois de travail pour 52 minutes de liberté.", date: "Il y a 2j",
-    reactions: { strength: 12, spark: 5, heart: 3 }, comments: [] },
-];
+const DEMO_FEED = [];
 
 
 const DEMO_FOLLOWERS = [];
-const DEMO_REQUESTS  = [];
+const DEMO_REQUESTS = [];
 
 const INVITE_CODE = 'winn-' + Math.random().toString(36).slice(2,8);
 
@@ -1564,16 +1553,17 @@ export default function Winn() {
 
                   {/* Invite */}
                   <button onClick={() => setShowInvite(true)} style={{
-                    width: "100%", background: T.card, border: `1px solid ${T.border}`,
-                    borderRadius: 16, padding: "16px", cursor: "pointer", textAlign: "left",
-                    fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", gap: 12, marginBottom: 14,
+                    width: "100%", background: `linear-gradient(135deg, ${T.accentBg}, #FFF8F0)`,
+                    border: `1.5px solid ${T.accentSoft}`, borderRadius: 16, padding: "16px 18px",
+                    cursor: "pointer", textAlign: "left", fontFamily: "'DM Sans',sans-serif",
+                    display: "flex", alignItems: "center", gap: 12, marginBottom: 14,
                   }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 10, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🔗</div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Inviter quelqu'un</div>
-                      <div style={{ fontSize: 12, color: T.muted }}>Partager un lien privé</div>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🔗</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Inviter dans mon cercle</div>
+                      <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Partage le lien avec tes proches</div>
                     </div>
-                    <span style={{ marginLeft: "auto", color: T.muted, fontSize: 16 }}>→</span>
+                    <span style={{ color: T.accent, fontSize: 18, fontWeight: 700 }}>→</span>
                   </button>
 
                   {/* Public entries */}
@@ -1651,15 +1641,43 @@ export default function Winn() {
         {/* ── Invite modal ── */}
         {showInvite && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(26,25,20,.45)", backdropFilter: "blur(4px)", zIndex: 900, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setShowInvite(false)}>
-            <div style={{ background: T.card, borderRadius: "22px 22px 0 0", padding: "24px 22px 40px", width: "100%", maxWidth: 440, animation: "slideUp .3s ease" }} onClick={e => e.stopPropagation()}>
-              <div style={{ width: 32, height: 4, background: T.border, borderRadius: 2, margin: "0 auto 20px" }} />
-              <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, marginBottom: 4 }}>Inviter quelqu'un</div>
-              <div style={{ fontSize: 13, color: T.muted, marginBottom: 18, lineHeight: 1.6 }}>Partage ce lien uniquement aux personnes en qui tu as confiance.</div>
-              <div style={{ background: T.soft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "13px 15px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <span style={{ fontSize: 13, color: T.mid, fontFamily: "monospace" }}>winn.app/{INVITE_CODE}</span>
-                <button onClick={() => { navigator.clipboard?.writeText('winn.app/' + INVITE_CODE); toast_('Lien copié ✦'); setShowInvite(false); }} style={{ background: T.text, color: "#fff", border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 12, fontFamily: "'DM Sans',sans-serif", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>Copier</button>
+            <div style={{ background: T.card, borderRadius: "22px 22px 0 0", padding: "24px 22px 44px", width: "100%", maxWidth: 440, animation: "slideUp .3s ease" }} onClick={e => e.stopPropagation()}>
+              <div style={{ width: 32, height: 4, background: T.border, borderRadius: 2, margin: "0 auto 22px" }} />
+              <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, marginBottom: 4 }}>Inviter quelqu'un</div>
+              <div style={{ fontSize: 13, color: T.muted, marginBottom: 20, lineHeight: 1.6 }}>
+                Partage ce lien avec les personnes en qui tu as confiance. Elles pourront créer leur compte et rejoindre ton cercle.
               </div>
-              <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.6 }}>Ce lien expire dans 7 jours.</div>
+
+              {/* Link box */}
+              <div style={{ background: T.soft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "13px 15px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 12, color: T.mid, fontFamily: "monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {window.location.origin}
+                </span>
+                <button onClick={() => { navigator.clipboard?.writeText(window.location.origin); toast_('Lien copié ✦'); }} style={{ background: T.text, color: "#fff", border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 12, fontFamily: "'DM Sans',sans-serif", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  Copier
+                </button>
+              </div>
+
+              {/* Share options */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: "WhatsApp", color: "#25D366", action: () => window.open("https://wa.me/?text=" + encodeURIComponent("Rejoins-moi sur Winn., une app pour célébrer nos victoires et transformer nos épreuves 🌱 " + window.location.origin)) },
+                  { label: "Copier le message", color: T.accent, action: () => { navigator.clipboard?.writeText("Rejoins-moi sur Winn., une app pour célébrer nos victoires et transformer nos épreuves 🌱 " + window.location.origin); toast_("Message copié ✦"); } },
+                ].map(s => (
+                  <button key={s.label} onClick={() => { s.action(); }} style={{
+                    background: s.color + "15", border: `1px solid ${s.color}30`,
+                    borderRadius: 14, padding: "12px", cursor: "pointer",
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600,
+                    color: s.color, transition: "all .18s",
+                  }}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ fontSize: 11, color: T.muted, textAlign: "center", lineHeight: 1.6 }}>
+                Toute personne avec ce lien peut créer un compte.<br />Tu pourras gérer tes abonnés depuis ton profil.
+              </div>
             </div>
           </div>
         )}
