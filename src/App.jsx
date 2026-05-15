@@ -435,7 +435,7 @@ export default function App(){
   const saveTransform=()=>{
     if(!rfEdit.trim())return;
     saveEntry({type:"transform",text:rfEdit.trim(),original:rfInput,cat:rfCat,is_public:rfPublic,xp:60});
-    setRfInput("");setRfAngles([]);setRfChosen(null);setRfEdit("");setRfStep(0);setRfPublic(false);setAddMode("success");setTab("home");
+    setRfInput("");setRfAngles([]);setRfChosen(null);setRfEdit("");setRfStep(0);setRfPublic(false);setRfCat("esprit");setAddMode("success");setTab("home");
   };
 
   const handleReact=async(eid,type)=>{
@@ -612,52 +612,66 @@ export default function App(){
           </>}
 
           {addMode==="transform"&&<>
-            {rfStep===0&&<>
-              <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,marginBottom:4}}>Transformer</div>
-              <div style={{fontSize:13,color:T.muted,marginBottom:18,lineHeight:1.65}}>Confie quelque chose de difficile.<br/><span style={{fontStyle:"italic"}}>Nous allons chercher ce qu'il contient.</span></div>
-              <textarea ref={rfRef} rows={6} placeholder="Ex : J'ai raté une opportunité importante…" value={rfInput} onChange={e=>setRfInput(e.target.value)} style={{...taStyle,borderColor:rfInput?T.sage:T.border}}/>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-                <Toggle on={rfPublic} onChange={setRfPublic} label={rfPublic?"Visible par mon cercle":"Privé"}/>
-              </div>
-              <div style={{display:"flex",gap:9}}>
-                <button className="btn btn-outline" onClick={()=>setTab("home")} style={{padding:"14px 18px"}}>←</button>
-                <button className="btn btn-sage" onClick={callAI} style={{flex:1}} disabled={!rfInput.trim()}>Trouver le sens →</button>
-              </div>
-            </>}
-            {rfStep===1&&<div style={{textAlign:"center",padding:"56px 0"}}>
-              <div style={{width:44,height:44,borderRadius:"50%",border:`3px solid ${T.sageSoft}`,borderTopColor:T.sage,animation:"spin 1s linear infinite",margin:"0 auto 22px"}}/>
-              <div style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:8}}>En contemplation…</div>
-              <div style={{fontSize:13,color:T.muted,fontStyle:"italic",lineHeight:1.7}}>"Ce n'est pas ce qui nous arrive<br/>qui nous définit, mais ce que nous en faisons."</div>
-              <div style={{fontSize:11,color:T.muted,marginTop:5}}>— Épictète</div>
-            </div>}
-            {rfStep===2&&<>
-              <div style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:4}}>Trois regards</div>
-              <div style={{fontSize:13,color:T.muted,marginBottom:14}}>Choisis la perspective qui résonne en toi.</div>
-              <div style={{fontSize:12,color:T.muted,fontStyle:"italic",borderLeft:`2px solid ${T.border}`,paddingLeft:10,marginBottom:18,lineHeight:1.5}}>"{rfInput.length>80?rfInput.slice(0,80)+"…":rfInput}"</div>
-              {rfAngles.map((a,i)=>(
-                <div key={i} className="angle" onClick={()=>{setRfChosen(a);setRfEdit(a.texte);setRfStep(3);setTimeout(()=>editRef.current?.focus(),100);}}>
-                  <div style={{fontSize:10,color:T.sage,fontWeight:700,letterSpacing:".08em",marginBottom:5}}>{["FORCE","SAGESSE","OPPORTUNITÉ"][i]}</div>
-                  <div style={{fontFamily:"'DM Serif Display',serif",fontSize:16,marginBottom:5}}>{a.titre}</div>
-                  <div style={{fontSize:13,color:T.mid,lineHeight:1.6}}>{a.texte}</div>
-                  <div style={{fontSize:12,color:T.sage,marginTop:8}}>Choisir →</div>
-                </div>
+            <div style={{fontFamily:"'DM Serif Display',serif",fontSize:22,marginBottom:4}}>Transformer</div>
+            <div style={{fontSize:13,color:T.muted,marginBottom:22,lineHeight:1.65}}>
+              Partage une épreuve et ce qu'elle t'apporte.<br/>
+              <span style={{fontStyle:"italic"}}>Chaque difficulté contient quelque chose.</span>
+            </div>
+
+            {/* Step indicator */}
+            <div style={{display:"flex",gap:8,marginBottom:20,alignItems:"center"}}>
+              {[{n:1,label:"L'épreuve"},{n:2,label:"Ce que ça m'apporte"}].map((s,i)=>(
+                <React.Fragment key={s.n}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{width:24,height:24,borderRadius:"50%",background:rfStep>=i?T.sage:T.soft,border:`1.5px solid ${rfStep>=i?T.sage:T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:rfStep>=i?"#fff":T.muted,transition:"all .3s"}}>{s.n}</div>
+                    <span style={{fontSize:11,color:rfStep>=i?T.sage:T.muted,fontWeight:rfStep>=i?600:400}}>{s.label}</span>
+                  </div>
+                  {i===0&&<div style={{flex:1,height:1,background:rfStep>=1?T.sage:T.border,transition:"background .3s"}}/>}
+                </React.Fragment>
               ))}
-              <button className="btn btn-outline" onClick={()=>setRfStep(0)} style={{width:"100%",marginTop:4}}>← Reformuler</button>
+            </div>
+
+            {rfStep===0&&<>
+              <div style={{fontSize:11,fontWeight:600,color:T.mid,letterSpacing:".04em",marginBottom:8}}>CE QUI S'EST PASSÉ</div>
+              <textarea ref={rfRef} rows={5}
+                placeholder="Ex : J'ai raté une opportunité importante. Je me sentais prête mais ça ne s'est pas passé comme prévu…"
+                value={rfInput} onChange={e=>setRfInput(e.target.value)}
+                style={{...taStyle,borderColor:rfInput?T.sage:T.border}}/>
+              <div style={{display:"flex",gap:9,marginTop:6}}>
+                <button className="btn btn-outline" onClick={()=>setTab("home")} style={{padding:"14px 18px"}}>←</button>
+                <button className="btn btn-sage" onClick={()=>setRfStep(1)} style={{flex:1}} disabled={!rfInput.trim()}>
+                  Suite → Ce que ça m'apporte
+                </button>
+              </div>
             </>}
-            {rfStep===3&&<>
-              <div style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:4}}>Fais-le tien</div>
-              <div style={{fontSize:13,color:T.muted,marginBottom:10}}>Retouche librement. C'est ta voix qui compte.</div>
-              <div style={{fontSize:10,color:T.sage,fontWeight:700,letterSpacing:".07em",marginBottom:7}}>{rfChosen?.titre}</div>
-              <textarea ref={editRef} rows={5} value={rfEdit} onChange={e=>setRfEdit(e.target.value)} style={{...taStyle,borderColor:T.sage}}/>
-              <div style={{fontSize:11,fontWeight:600,color:T.mid,letterSpacing:".04em",marginBottom:10}}>CATÉGORIE</div>
+
+            {rfStep===1&&<>
+              {/* Reminder of what happened */}
+              <div style={{background:T.sageBg,border:`1px solid ${T.sageSoft}`,borderRadius:12,padding:"12px 14px",marginBottom:18,fontSize:12,color:T.sage,lineHeight:1.6,fontStyle:"italic"}}>
+                "{rfInput.length>100?rfInput.slice(0,100)+"…":rfInput}"
+              </div>
+
+              <div style={{fontSize:11,fontWeight:600,color:T.mid,letterSpacing:".04em",marginBottom:8}}>CE QUE ÇA M'APPORTE</div>
+              <div style={{fontSize:12,color:T.muted,marginBottom:12,lineHeight:1.6}}>
+                Une leçon, une force découverte, une porte qui s'ouvre…<br/>À toi de trouver ce qui résonne.
+              </div>
+              <textarea ref={editRef} rows={5}
+                placeholder="Ex : Cet échec m'a appris que je me mets trop de pression. J'ai découvert une résilience que je ne connaissais pas…"
+                value={rfEdit} onChange={e=>setRfEdit(e.target.value)}
+                style={{...taStyle,borderColor:rfEdit?T.sage:T.border}}/>
+
+              <div style={{fontSize:11,fontWeight:600,color:T.mid,letterSpacing:".04em",marginBottom:10,marginTop:14}}>CATÉGORIE</div>
               <CatChips sel={rfCat} onSel={setRfCat}/>
+
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
                 <Toggle on={rfPublic} onChange={setRfPublic} label={rfPublic?"Visible par mon cercle":"Privé"}/>
                 <span style={{fontSize:11,color:T.sage,fontWeight:600}}>+60 XP</span>
               </div>
               <div style={{display:"flex",gap:9}}>
-                <button className="btn btn-outline" onClick={()=>setRfStep(2)} style={{padding:"14px 18px"}}>←</button>
-                <button className="btn btn-sage" onClick={saveTransform} style={{flex:1}} disabled={!rfEdit.trim()}>Enregistrer · +60 XP</button>
+                <button className="btn btn-outline" onClick={()=>setRfStep(0)} style={{padding:"14px 18px"}}>←</button>
+                <button className="btn btn-sage" onClick={saveTransform} style={{flex:1}} disabled={!rfEdit.trim()}>
+                  Enregistrer · +60 XP
+                </button>
               </div>
             </>}
           </>}
