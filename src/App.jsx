@@ -460,6 +460,11 @@ function Onboarding({ onDone }) {
 export default function Winn() {
   const load = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? fb; } catch { return fb; } };
 
+  // Force clear legacy keys from old versions
+  useEffect(() => {
+    ['w4_e','w4_xp','w4_b','w5_e','w5_xp','w5_b','w6_profile','sb_successes','sb_xp','sb_badges','winn_entries','winn_xp','winn_b','winn_profile'].forEach(k => localStorage.removeItem(k));
+  }, []);
+
   // Clear legacy localStorage keys that might conflict
   const [session,     setSession]     = useState(() => {
     try {
@@ -865,6 +870,13 @@ export default function Winn() {
         <div style={{ fontSize:11, color:T.muted, textAlign:"center", marginTop:20, lineHeight:1.6 }}>
           Tes données sont privées et sécurisées.<br />Tu choisis ce que tu partages.
         </div>
+        <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{
+          marginTop:16, background:"none", border:"none", cursor:"pointer",
+          fontSize:10, color:T.border, fontFamily:"'DM Sans',sans-serif",
+          display:"block", width:"100%", textAlign:"center",
+        }}>
+          Problème de connexion ? Réinitialiser
+        </button>
       </div>
     </div>
   );
