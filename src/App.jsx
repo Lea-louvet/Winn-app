@@ -345,7 +345,11 @@ export default function App(){
   const[toast,setToast]=useState({msg:"",on:false});
   const[starCelebrate,setStarCelebrate]=useState(false);
   const[showInvite,setShowInvite]=useState(false);
-  const[friendView,setFriendView]=useState(null); // {name, color, entries}
+  const[friendView,setFriendView]=useState(null);
+  const[follows,setFollows]=useState([]); // list of user_ids we follow
+  const[searchQuery,setSearchQuery]=useState("");
+  const[searchResults,setSearchResults]=useState([]);
+  const[searching,setSearching]=useState(false);
 
   const textRef=useRef(),rfRef=useRef(),editRef=useRef();
   const token=session?.access_token;
@@ -364,6 +368,9 @@ export default function App(){
       if(Array.isArray(profs)&&profs[0]){const p=profs[0];setProfile({name:p.name,bio:p.bio||""});setXp(p.xp||0);setBadges(p.badges||[]);}
       const ents=await sb(`/rest/v1/entries?user_id=eq.${userId}&order=created_at.desc`,{},token);
       if(Array.isArray(ents))setEntries(ents);
+      // Load follows
+      const fols=await sb(`/rest/v1/follows?follower_id=eq.${userId}&status=eq.accepted`,{},token);
+      if(Array.isArray(fols))setFollows(fols.map(f=>f.following_id));
     })();
   },[token,userId]);
 
@@ -371,6 +378,7 @@ export default function App(){
   useEffect(()=>{
     if(!token)return;
     (async()=>{
+      // Only load entries from followed users + own entries
       const ents=await sb(`/rest/v1/entries?is_public=eq.true&order=created_at.desc&limit=30`,{},token);
       if(!Array.isArray(ents)||!ents.length)return;
       const uids=[...new Set(ents.map(e=>e.user_id))];
@@ -468,6 +476,66 @@ export default function App(){
     const np=!e.is_public;
     setEntries(prev=>prev.map(x=>x.id===eid?{...x,is_public:np}:x));
     if(token)await sb(`/rest/v1/entries?id=eq.${eid}`,{method:"PATCH",body:JSON.stringify({is_public:np})},token).catch(()=>{});
+  };
+
+  const searchUsers=async(q)=>{
+    if(!q.trim()||!token){setSearchResults([]);return;}
+    setSearching(true);
+    try{
+      const res=await sb(`/rest/v1/profiles?name=ilike.*${encodeURIComponent(q.trim())}*&limit=10`,{},token);
+      if(Array.isArray(res)){
+        setSearchResults(res.filter(p=>p.id!==userId).map(p=>({
+          id:p.id,name:p.name,xp:p.xp||0,
+          level:getLevel(p.xp||0).label,
+          following:follows.includes(p.id),
+        })));
+      }
+    }catch(e){console.error(e);}
+    setSearching(false);
+  };
+
+  const followUser=async(targetId,targetName)=>{
+    if(!token||!userId)return;
+    try{
+      await sb("/rest/v1/follows",{method:"POST",body:JSON.stringify({follower_id:userId,following_id:targetId,status:"accepted"})},token);
+      setFollows(prev=>[...prev,targetId]);
+      setSearchResults(prev=>prev.map(p=>p.id===targetId?{...p,following:true}:p));
+      toast_(`Tu suis maintenant ${targetName} ◉`);
+      // Reload feed
+      const ents=await sb(`/rest/v1/entries?is_public=eq.true&order=created_at.desc&limit=30`,{},token);
+      if(Array.isArray(ents)){
+        const uids=[...new Set(ents.map(e=>e.user_id))];
+        if(!uids.length)return;
+        const profs=await sb(`/rest/v1/profiles?id=in.(${uids.join(",")})`,{},token);
+        const pm={};if(Array.isArray(profs))profs.forEach(p=>{pm[p.id]=p;});
+        const eids=ents.map(e=>e.id);
+        const reacts=await sb(`/rest/v1/reactions?entry_id=in.(${eids.join(",")})`,{},token);
+        const comms=await sb(`/rest/v1/comments?entry_id=in.(${eids.join(",")})&order=created_at.asc`,{},token);
+        const cuids=[...new Set((Array.isArray(comms)?comms:[]).map(c=>c.user_id))];
+        let cp={};
+        if(cuids.length){const r=await sb(`/rest/v1/profiles?id=in.(${cuids.join(",")})`,{},token);if(Array.isArray(r))r.forEach(p=>{cp[p.id]=p;});}
+        const colors=[T.rose,T.blue,T.violet,T.green,T.accent,T.sage];
+        const newFollows=[...follows,targetId];
+        setFeed(ents.filter(e=>newFollows.includes(e.user_id)||e.user_id===userId).map(e=>{
+          const a=pm[e.user_id]||{name:"?",xp:0};
+          const er=Array.isArray(reacts)?reacts.filter(r=>r.entry_id===e.id):[];
+          const ec=Array.isArray(comms)?comms.filter(c=>c.entry_id===e.id):[];
+          const rx={strength:0,spark:0,heart:0};er.forEach(r=>{rx[r.type]=(rx[r.type]||0)+1;});
+          return{...e,author_name:a.name,author_level:getLevel(a.xp||0).label,author_color:colors[a.name.charCodeAt(0)%colors.length],reactions:rx,comments:ec.map(c=>({...c,author_name:(cp[c.user_id]||{name:"?"}).name}))};
+        }));
+      }
+    }catch(e){console.error(e);}
+  };
+
+  const unfollowUser=async(targetId,targetName)=>{
+    if(!token||!userId)return;
+    try{
+      await sb(`/rest/v1/follows?follower_id=eq.${userId}&following_id=eq.${targetId}`,{method:"DELETE"},token);
+      setFollows(prev=>prev.filter(id=>id!==targetId));
+      setSearchResults(prev=>prev.map(p=>p.id===targetId?{...p,following:false}:p));
+      setFeed(prev=>prev.filter(e=>e.user_id!==targetId));
+      toast_(`Tu ne suis plus ${targetName}`);
+    }catch(e){console.error(e);}
   };
 
   const callPortrait=async()=>{
@@ -799,8 +867,8 @@ export default function App(){
               ?<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"40px 24px",textAlign:"center"}}>
                 <div style={{fontSize:28,marginBottom:12}}>◉</div>
                 <div style={{fontFamily:"'DM Serif Display',serif",fontSize:17,marginBottom:8}}>Le fil se construit</div>
-                <div style={{fontSize:13,color:T.muted,lineHeight:1.7,marginBottom:16}}>Invite tes amies et partage tes entrées en les mettant en "Public".</div>
-                <button className="btn btn-dark" onClick={()=>setShowInvite(true)} style={{padding:"12px 24px",fontSize:14}}>Inviter des amies</button>
+                <div style={{fontSize:13,color:T.muted,lineHeight:1.7,marginBottom:16}}>Suis tes amies depuis l'onglet "Abonnées"<br/>pour voir leurs entrées ici.</div>
+                <button className="btn btn-dark" onClick={()=>setCercleSub("abonnes")} style={{padding:"12px 24px",fontSize:14}}>Trouver des amies →</button>
               </div>
               :feed.map(item=><FeedCard key={item.id} item={item} onReact={handleReact} onComment={handleComment}
               onAuthorTap={()=>{
@@ -843,13 +911,72 @@ export default function App(){
           </div>}
 
           {cercleSub==="abonnes"&&<div>
-            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"32px 24px",textAlign:"center",marginBottom:16}}>
-              <div style={{fontSize:28,marginBottom:12}}>◉</div>
-              <div style={{fontFamily:"'DM Serif Display',serif",fontSize:17,marginBottom:8}}>Construis ton cercle</div>
-              <div style={{fontSize:13,color:T.muted,lineHeight:1.7,marginBottom:16}}>Invite tes amies avec le lien ci-dessous.<br/>Leurs entrées publiques apparaîtront dans ton fil.</div>
-              <button className="btn btn-dark" onClick={()=>setShowInvite(true)} style={{padding:"13px 28px",fontSize:14}}>🔗 Obtenir le lien</button>
+            {/* Search bar */}
+            <div style={{position:"relative",marginBottom:16}}>
+              <input
+                placeholder="Rechercher une amie par prénom…"
+                value={searchQuery}
+                onChange={e=>{setSearchQuery(e.target.value);searchUsers(e.target.value);}}
+                style={{width:"100%",background:T.soft,border:`1.5px solid ${searchQuery?T.accent:T.border}`,borderRadius:40,padding:"12px 18px 12px 44px",fontSize:14,fontFamily:"'DM Sans',sans-serif",color:T.text,outline:"none",transition:"border-color .2s"}}
+              />
+              <span style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",fontSize:16,color:T.muted}}>🔍</span>
+              {searchQuery&&<button onClick={()=>{setSearchQuery("");setSearchResults([]);}} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:T.muted}}>×</button>}
             </div>
-            <div style={{fontSize:11,color:T.muted,textAlign:"center",lineHeight:1.7}}>Toute personne qui crée un compte sur Winn.<br/>peut voir les entrées que tu mets en "Public".</div>
+
+            {/* Search results */}
+            {searching&&<div style={{textAlign:"center",padding:"20px 0",color:T.muted,fontSize:13}}>Recherche…</div>}
+
+            {!searching&&searchQuery&&searchResults.length===0&&(
+              <div style={{textAlign:"center",padding:"24px 0",color:T.muted,fontSize:13}}>
+                Aucun résultat pour "{searchQuery}"
+              </div>
+            )}
+
+            {!searching&&searchResults.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+                {searchResults.map(u=>(
+                  <div key={u.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                    <Av name={u.name} size={42} color={[T.rose,T.blue,T.violet,T.green,T.accent,T.sage][u.name.charCodeAt(0)%6]}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:600,color:T.text}}>{u.name}</div>
+                      <div style={{fontSize:11,color:T.muted,marginTop:2}}>{u.level} · {u.xp} XP</div>
+                    </div>
+                    <button
+                      onClick={()=>u.following?unfollowUser(u.id,u.name):followUser(u.id,u.name)}
+                      style={{padding:"8px 16px",borderRadius:40,border:`1.5px solid ${u.following?T.border:T.text}`,background:u.following?"transparent":T.text,color:u.following?T.muted:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap"}}>
+                      {u.following?"Suivi ✓":"Suivre"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Following list */}
+            {follows.length>0&&!searchQuery&&(
+              <>
+                <div style={{fontSize:11,fontWeight:700,color:T.muted,letterSpacing:".06em",marginBottom:10}}>TU SUIS · {follows.length}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+                  {feed.filter((e,i,a)=>a.findIndex(x=>x.user_id===e.user_id)===i&&e.user_id!==userId).map(e=>(
+                    <div key={e.user_id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+                      <Av name={e.author_name} size={38} color={e.author_color||T.accent}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{e.author_name}</div>
+                        <div style={{fontSize:11,color:T.muted}}>{e.author_level}</div>
+                      </div>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:T.green,boxShadow:`0 0 6px ${T.green}`}}/>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Invite */}
+            {!searchQuery&&<>
+              <div style={{height:1,background:T.border,marginBottom:16}}/>
+              <button onClick={()=>setShowInvite(true)} style={{width:"100%",background:T.soft,border:`1px solid ${T.border}`,borderRadius:16,padding:"14px 18px",cursor:"pointer",textAlign:"center",fontFamily:"'DM Sans',sans-serif",fontSize:13,color:T.mid,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                🔗 Inviter une amie qui n'est pas encore sur Winn.
+              </button>
+            </>}
           </div>}
         </div>}
 
