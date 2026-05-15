@@ -101,25 +101,19 @@ const OB_SLIDES = [
 const DEMO_FEED = [
   { id: "f1", author: "Marie L.", avatar: "ML", color: T.rose, level: "Confirmée",
     type: "success", text: "J'ai terminé ma formation après 3 mois d'effort continu. Je ne pensais pas tenir.", date: "Aujourd'hui",
-    reactions: { strength: 4, spark: 7, heart: 2 }, comments: [{ a: "Thomas R.", t: "Bravo, quel parcours !", time: "2h" }] },
+    reactions: { strength: 4, spark: 7, heart: 2 }, comments: [] },
   { id: "f2", author: "Thomas R.", avatar: "TR", color: T.blue, level: "Pratiquant",
     type: "transform", original: "J'ai raté une présentation importante devant toute l'équipe.",
     text: "Cet échec m'a montré que je plaçais ma valeur dans le regard des autres. Maintenant je travaille pour moi.", date: "Hier",
     reactions: { strength: 9, spark: 3, heart: 11 }, comments: [] },
   { id: "f3", author: "Léa M.", avatar: "LM", color: T.violet, level: "Expert·e",
     type: "success", text: "Premier 10 km sans m'arrêter. Six mois de travail pour 52 minutes de liberté.", date: "Il y a 2j",
-    reactions: { strength: 12, spark: 5, heart: 3 }, comments: [{ a: "Marie L.", t: "🌱 Tu es une source d'inspiration", time: "1j" }] },
+    reactions: { strength: 12, spark: 5, heart: 3 }, comments: [] },
 ];
 
 
-const DEMO_FOLLOWERS = [
-  { id: "u2", name: "Marie L.",  avatar: "ML", color: T.rose,   level: "Confirmée",  status: "accepted" },
-  { id: "u3", name: "Thomas R.", avatar: "TR", color: T.blue,   level: "Pratiquant", status: "accepted" },
-];
-
-const DEMO_REQUESTS = [
-  { id: "u5", name: "Sam K.", avatar: "SK", color: T.green, message: "Je traverse une période difficile et je cherche de l'inspiration." },
-];
+const DEMO_FOLLOWERS = [];
+const DEMO_REQUESTS  = [];
 
 const INVITE_CODE = 'winn-' + Math.random().toString(36).slice(2,8);
 
@@ -564,6 +558,20 @@ export default function Winn() {
     if (!rfInput.trim()) return;
     setRfStep(1);
     try {
+      const prompt = [
+        "Tu es un guide philosophique bienveillant, inspire par le stoicisme, Viktor Frankl et Jung.",
+        "",
+        "Quelqu'un te confie : \"" + rfInput + "\"",
+        "",
+        "Propose 3 angles de transformation de 2-3 phrases chacun.",
+        "Angle 1 : la force interieure ou resilience que cela revele.",
+        "Angle 2 : la sagesse ou lecon de vie que cela apporte.",
+        "Angle 3 : l'opportunite ou nouvelle porte que cela ouvre.",
+        "",
+        "Reponds UNIQUEMENT en JSON valide, sans texte avant ou apres, sans backticks markdown :",
+        '{"angles":[{"titre":"...","texte":"..."},{"titre":"...","texte":"..."},{"titre":"...","texte":"..."}]}'
+      ].join("\n");
+
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -572,22 +580,23 @@ export default function Winn() {
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: `Tu es un guide philosophique bienveillant, inspiré par le stoïcisme, Viktor Frankl et Jung.
-
-Quelqu'un te confie : "${rfInput}"
-
-Propose 3 angles de transformation (2-3 phrases chacun) : force intérieure, sagesse, opportunité.
-Réponds UNIQUEMENT en JSON valide sans backticks :
-{"angles":[{"titre":"...","texte":"..."},{"titre":"...","texte":"..."},{"titre":"...","texte":"..."}]}` }],
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
         }),
       });
+
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
-      const parsed = JSON.parse(data.content.map(b => b.text || "").join("").replace(/```json|```/g, "").trim());
-      setRfAngles(parsed.angles); setRfStep(2);
+      const raw = data.content.map(b => b.text || "").join("");
+      const clean = raw.replace(/^[^{]*/,"").replace(/[^}]*$/,"");
+      const parsed = JSON.parse(clean);
+      setRfAngles(parsed.angles);
+      setRfStep(2);
     } catch (err) {
-      console.error(err); setRfStep(0); toast_("Erreur · Réessaie dans un instant");
+      console.error("AI error:", err);
+      setRfStep(0);
+      toast_("Erreur · Réessaie dans un instant");
     }
   };
 
@@ -627,19 +636,16 @@ Réponds UNIQUEMENT en JSON valide sans backticks :
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514', max_tokens: 1200,
-          messages: [{ role: 'user', content: `Tu es un psychologue humaniste bienveillant. Analyse ces entrées de journal de développement personnel et crée un portrait de croissance court et profond.
-
-Entrées :
-${sample}
-
-Réponds UNIQUEMENT en JSON valide sans backticks :
-{
-  "titre": "Un titre poétique et personnel (5-7 mots)",
-  "resume": "2-3 phrases qui résument la personnalité et la trajectoire de cette personne, écrites à la deuxième personne (tu/vous). Chaleureux et précis.",
-  "forces": ["Force 1 (5-7 mots)", "Force 2", "Force 3"],
-  "pattern": "Une observation subtile sur la façon dont cette personne avance dans la vie (1-2 phrases)",
-  "invitation": "Une question ou invitation philosophique personnalisée pour continuer à grandir (1 phrase)"
-}` }],
+          messages: [{ role: 'user', content: [
+            "Tu es un psychologue humaniste bienveillant.",
+            "Analyse ces entrees de journal de developpement personnel et cree un portrait de croissance.",
+            "",
+            "Entrees :",
+            sample,
+            "",
+            "Reponds UNIQUEMENT en JSON valide sans backticks, sans texte avant ou apres :",
+            '{"titre":"titre poetique 5-7 mots","resume":"2-3 phrases a la 2e personne","forces":["Force 1","Force 2","Force 3"],"pattern":"observation subtile 1-2 phrases","invitation":"question philosophique personnalisee"}'
+          ].join("\n") }],
         }),
       });
       const data = await res.json();
@@ -1325,7 +1331,15 @@ Réponds UNIQUEMENT en JSON valide sans backticks :
               {/* FIL */}
               {cercleSub === "feed" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {feed.map(item => <FeedCard key={item.id} item={item} onReact={react} onComment={comment} />)}
+                  {feed.length === 0 ? (
+                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: "40px 24px", textAlign: "center" }}>
+                      <div style={{ fontSize: 28, marginBottom: 12 }}>◉</div>
+                      <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 17, marginBottom: 8 }}>Ton cercle se construit</div>
+                      <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.7 }}>
+                        Invite des proches depuis ton profil.<br />Leurs avancées apparaîtront ici.
+                      </div>
+                    </div>
+                  ) : feed.map(item => <FeedCard key={item.id} item={item} onReact={react} onComment={comment} />)}
                 </div>
               )}
 
