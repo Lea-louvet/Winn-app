@@ -460,7 +460,16 @@ function Onboarding({ onDone }) {
 export default function Winn() {
   const load = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? fb; } catch { return fb; } };
 
-  const [session,     setSession]     = useState(() => { try { return JSON.parse(localStorage.getItem('w_sess') || 'null'); } catch { return null; } });
+  // Clear legacy localStorage keys that might conflict
+  const [session,     setSession]     = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('w_sess') || 'null');
+      // Validate session has required fields
+      if (s && s.access_token && s.user && s.user.id) return s;
+      localStorage.removeItem('w_sess');
+      return null;
+    } catch { return null; }
+  });
   const [authView,    setAuthView]    = useState('login');
   const [authEmail,   setAuthEmail]   = useState('');
   const [authPass,    setAuthPass]    = useState('');
@@ -655,11 +664,26 @@ export default function Winn() {
         body: JSON.stringify({ email: authEmail.trim(), password: authPass.trim(), data: { name: authName.trim() } }),
       });
       if (res.error) { setAuthError(res.error.message); setAuthLoading(false); return; }
-      if (res.access_token) {
+      if (res.access_token && res.user) {
         setSession(res);
         setProfile({ name: authName.trim(), bio: '', avatar: authName.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) });
+      } else if (res.user && !res.access_token) {
+        setAuthError('Un email de confirmation a été envoyé. Vérifie ta boîte mail.');
+      } else if (res.error) {
+        setAuthError(res.error.message || 'Erreur lors de l'inscription.');
       } else {
-        setAuthError('Vérifie ton email pour confirmer ton compte.');
+        // Auto-confirm might be off — try signing in directly
+        const loginRes = await supaFetch('/auth/v1/token?grant_type=password', {
+          method: 'POST',
+          body: JSON.stringify({ email: authEmail.trim(), password: authPass.trim() }),
+        });
+        if (loginRes.access_token && loginRes.user) {
+          setSession(loginRes);
+          setProfile({ name: authName.trim(), bio: '', avatar: authName.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) });
+        } else {
+          setAuthError('Compte créé ! Tu peux maintenant te connecter.');
+          setAuthView('login');
+        }
       }
     } catch(e) { setAuthError('Erreur réseau. Réessaie.'); }
     setAuthLoading(false);
@@ -673,7 +697,11 @@ export default function Winn() {
         method: 'POST',
         body: JSON.stringify({ email: authEmail.trim(), password: authPass.trim() }),
       });
-      if (res.error) { setAuthError('Email ou mot de passe incorrect.'); setAuthLoading(false); return; }
+      if (res.error || !res.access_token || !res.user) {
+        setAuthError('Email ou mot de passe incorrect.');
+        setAuthLoading(false);
+        return;
+      }
       setSession(res);
       // Load profile
       const profiles = await supaFetch('/rest/v1/profiles?id=eq.' + res.user.id, {}, res.access_token);
