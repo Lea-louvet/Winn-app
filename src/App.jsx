@@ -163,19 +163,46 @@ function EntryCard({e,onToggle,showToggle}){
   </div>;
 }
 
-function FeedCard({item,onReact,onComment}){
+
+function FriendCommentBox({item,onComment}){
   const[open,setOpen]=useState(false);
   const[input,setInput]=useState("");
+  return <div style={{borderTop:`1px solid ${T.border}`}}>
+    <button onClick={()=>setOpen(v=>!v)} style={{width:"100%",padding:"9px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.muted,textAlign:"left",display:"flex",alignItems:"center",gap:6}}>
+      💬 {item.comments?.length||0} commentaire{(item.comments?.length||0)>1?"s":""}
+      <span style={{marginLeft:"auto",fontSize:10}}>{open?"▲":"▼"}</span>
+    </button>
+    {open&&<div style={{padding:"0 16px 12px"}}>
+      {(item.comments||[]).map((c,i)=><div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:i<item.comments.length-1?`1px solid ${T.border}`:"none"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+          <span style={{fontSize:12,fontWeight:600,color:T.text}}>{c.author_name||"?"}</span>
+          <span style={{fontSize:10,color:T.muted}}>{new Date(c.created_at).toLocaleDateString("fr-FR")}</span>
+        </div>
+        <div style={{fontSize:13,color:T.mid,lineHeight:1.5}}>{c.text}</div>
+      </div>)}
+      <div style={{display:"flex",gap:7,marginTop:8}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Ajouter un commentaire…"
+          onKeyDown={e=>{if(e.key==="Enter"&&input.trim()){onComment(item.id,input.trim());setInput("");}}}
+          style={{flex:1,background:T.soft,border:`1px solid ${T.border}`,borderRadius:20,padding:"8px 14px",fontSize:13,fontFamily:"'DM Sans',sans-serif",color:T.text,outline:"none",resize:"none"}}/>
+        <button onClick={()=>{if(input.trim()){onComment(item.id,input.trim());setInput("");}}} style={{background:T.text,color:"#fff",border:"none",borderRadius:20,padding:"8px 14px",fontSize:12,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",fontWeight:600}}>→</button>
+      </div>
+    </div>}
+  </div>;
+}
+
+function FeedCard({item,onReact,onComment,onAuthorTap}){
   const isT=item.type==="transform";
   const color=isT?T.sage:T.accent;
   const bg=isT?T.sageBg:T.accentBg;
   return <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:20,overflow:"hidden"}}>
     <div style={{display:"flex",alignItems:"center",gap:11,padding:"14px 17px 10px"}}>
-      <Av name={item.author_name||"?"} size={36} color={item.author_color||T.accent}/>
-      <div style={{flex:1}}>
-        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{item.author_name}</div>
-        <div style={{fontSize:11,color:T.muted}}>{item.author_level} · {new Date(item.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}</div>
-      </div>
+      <button onClick={onAuthorTap} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:10,flex:1}}>
+        <Av name={item.author_name||"?"} size={36} color={item.author_color||T.accent}/>
+        <div style={{textAlign:"left"}}>
+          <div style={{fontSize:13,fontWeight:600,color:T.text}}>{item.author_name}</div>
+          <div style={{fontSize:11,color:T.muted}}>{item.author_level} · {new Date(item.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}</div>
+        </div>
+      </button>
       <span style={{fontSize:9,fontWeight:700,color,background:bg,padding:"3px 9px",borderRadius:20,letterSpacing:".04em"}}>{isT?"TRANSFORMÉ":"SUCCÈS"}</span>
     </div>
     <div style={{padding:"0 17px 14px"}}>
@@ -190,24 +217,9 @@ function FeedCard({item,onReact,onComment}){
           <span>{r.emoji}</span><span style={{fontWeight:600}}>{item.reactions?.[r.id]||0}</span>
         </button>
       ))}
-      <button onClick={()=>setOpen(v=>!v)} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:12,color:T.muted,fontFamily:"'DM Sans',sans-serif"}}>💬 {item.comments?.length||0}</button>
+
     </div>
-    {open&&<div style={{borderTop:`1px solid ${T.border}`,padding:"12px 17px"}}>
-      {(!item.comments||!item.comments.length)&&<div style={{fontSize:12,color:T.muted,fontStyle:"italic",marginBottom:10}}>Sois la première à réagir.</div>}
-      {(item.comments||[]).map((c,i)=><div key={i} style={{marginBottom:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-          <span style={{fontSize:12,fontWeight:600,color:T.text}}>{c.author_name||"?"}</span>
-          <span style={{fontSize:10,color:T.muted}}>{new Date(c.created_at).toLocaleDateString("fr-FR")}</span>
-        </div>
-        <div style={{fontSize:13,color:T.mid,lineHeight:1.5}}>{c.text}</div>
-      </div>)}
-      <div style={{display:"flex",gap:7,marginTop:10}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} placeholder="Un mot d'encouragement…"
-          onKeyDown={e=>{if(e.key==="Enter"&&input.trim()){onComment(item.id,input.trim());setInput("");}}}
-          style={{flex:1,background:T.soft,border:`1px solid ${T.border}`,borderRadius:20,padding:"8px 14px",fontSize:13,fontFamily:"'DM Sans',sans-serif",color:T.text,outline:"none",resize:"none"}}/>
-        <button onClick={()=>{if(input.trim()){onComment(item.id,input.trim());setInput("");}}} style={{background:T.text,color:"#fff",border:"none",borderRadius:20,padding:"8px 14px",fontSize:12,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",fontWeight:600}}>→</button>
-      </div>
-    </div>}
+    {open&&<FriendCommentBox item={item} onComment={onComment}/>}
   </div>;
 }
 
@@ -333,6 +345,7 @@ export default function App(){
   const[toast,setToast]=useState({msg:"",on:false});
   const[starCelebrate,setStarCelebrate]=useState(false);
   const[showInvite,setShowInvite]=useState(false);
+  const[friendView,setFriendView]=useState(null); // {name, color, entries}
 
   const textRef=useRef(),rfRef=useRef(),editRef=useRef();
   const token=session?.access_token;
@@ -789,7 +802,11 @@ export default function App(){
                 <div style={{fontSize:13,color:T.muted,lineHeight:1.7,marginBottom:16}}>Invite tes amies et partage tes entrées en les mettant en "Public".</div>
                 <button className="btn btn-dark" onClick={()=>setShowInvite(true)} style={{padding:"12px 24px",fontSize:14}}>Inviter des amies</button>
               </div>
-              :feed.map(item=><FeedCard key={item.id} item={item} onReact={handleReact} onComment={handleComment}/>)
+              :feed.map(item=><FeedCard key={item.id} item={item} onReact={handleReact} onComment={handleComment}
+              onAuthorTap={()=>{
+                const authorEntries=feed.filter(f=>f.author_name===item.author_name);
+                setFriendView({name:item.author_name,color:item.author_color||T.accent,level:item.author_level,entries:authorEntries});
+              }}/>)
             }
           </div>}
 
@@ -837,6 +854,60 @@ export default function App(){
         </div>}
 
       </main>
+
+
+      {/* Friend profile modal */}
+      {friendView&&<div style={{position:"fixed",inset:0,background:"rgba(26,25,20,.5)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setFriendView(null)}>
+        <div style={{background:T.bg,borderRadius:"22px 22px 0 0",padding:"0 0 40px",width:"100%",maxWidth:440,maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column",animation:"slideUp .3s ease"}} onClick={e=>e.stopPropagation()}>
+          {/* Handle */}
+          <div style={{padding:"16px 22px 0",flexShrink:0}}>
+            <div style={{width:32,height:4,background:T.border,borderRadius:2,margin:"0 auto 20px"}}/>
+            {/* Author header */}
+            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20,paddingBottom:16,borderBottom:`1px solid ${T.border}`}}>
+              <Av name={friendView.name} size={52} color={friendView.color}/>
+              <div>
+                <div style={{fontFamily:"'DM Serif Display',serif",fontSize:20}}>{friendView.name}</div>
+                <div style={{fontSize:12,color:T.muted,marginTop:2}}>{friendView.level}</div>
+              </div>
+              <button onClick={()=>setFriendView(null)} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:20,color:T.muted}}>×</button>
+            </div>
+          </div>
+
+          {/* Entries list */}
+          <div style={{flex:1,overflowY:"auto",padding:"0 22px"}}>
+            {friendView.entries.length===0
+              ?<div style={{textAlign:"center",padding:"32px 0",color:T.muted,fontSize:13}}>Aucune entrée publique pour l'instant.</div>
+              :<div style={{display:"flex",flexDirection:"column",gap:12,paddingBottom:16}}>
+                {friendView.entries.map(item=>(
+                  <div key={item.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,overflow:"hidden"}}>
+                    {/* Entry content */}
+                    <div style={{padding:"14px 16px 10px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:9,fontWeight:700,color:item.type==="transform"?T.sage:T.accent,background:item.type==="transform"?T.sageBg:T.accentBg,padding:"3px 8px",borderRadius:20,letterSpacing:".04em"}}>{item.type==="transform"?"TRANSFORMÉ":"SUCCÈS"}</span>
+                        <span style={{fontSize:11,color:T.muted}}>{new Date(item.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}</span>
+                      </div>
+                      {item.type==="transform"&&item.original&&<div style={{fontSize:11,color:T.muted,fontStyle:"italic",borderLeft:`2px solid ${T.border}`,paddingLeft:8,marginBottom:6,lineHeight:1.4}}>"{item.original.length>60?item.original.slice(0,60)+"…":item.original}"</div>}
+                      <div style={{fontSize:14,color:T.text,lineHeight:1.6}}>{item.text}</div>
+                    </div>
+                    {/* Reactions */}
+                    <div style={{borderTop:`1px solid ${T.border}`,padding:"10px 16px",display:"flex",gap:6,alignItems:"center"}}>
+                      {REACTIONS.map(r=>(
+                        <button key={r.id} onClick={()=>handleReact(item.id,r.id)} style={{display:"flex",alignItems:"center",gap:5,background:T.soft,border:`1px solid ${T.border}`,borderRadius:20,padding:"5px 10px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:T.mid,transition:"all .15s"}}
+                          onMouseEnter={e=>{e.currentTarget.style.background=T.accentBg;e.currentTarget.style.borderColor=T.accent;}}
+                          onMouseLeave={e=>{e.currentTarget.style.background=T.soft;e.currentTarget.style.borderColor=T.border;}}>
+                          <span>{r.emoji}</span><span style={{fontWeight:600}}>{item.reactions?.[r.id]||0}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {/* Comment zone */}
+                    <FriendCommentBox item={item} onComment={handleComment}/>
+                  </div>
+                ))}
+              </div>
+            }
+          </div>
+        </div>
+      </div>}
 
       {/* Invite modal */}
       {showInvite&&<div style={{position:"fixed",inset:0,background:"rgba(26,25,20,.45)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setShowInvite(false)}>
