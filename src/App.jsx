@@ -449,6 +449,16 @@ function Onboarding({ onDone }) {
 export default function Winn() {
   const load = (k, fb) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? fb; } catch { return fb; } };
 
+  // Auth
+  const [authView,   setAuthView]   = useState('login'); // login | signup
+  const [authEmail,  setAuthEmail]  = useState('');
+  const [authPass,   setAuthPass]   = useState('');
+  const [authName,   setAuthName]   = useState('');
+  const [authError,  setAuthError]  = useState('');
+  const [authLoading,setAuthLoading]= useState(false);
+  const [session,    setSession]    = useState(() => { try { return JSON.parse(localStorage.getItem('w_session') || 'null'); } catch { return null; } });
+  const [syncLoading,setSyncLoading]= useState(false);
+
   const [onboarded, setOnboarded] = useState(() => load('w8_on', false));
   const [obStep,    setObStep]    = useState(0);
   const [entries,  setEntries]  = useState(() => load("w5_e", []));
@@ -500,6 +510,7 @@ export default function Winn() {
   const editRef = useRef();
 
   useEffect(() => { localStorage.setItem('w8_on', JSON.stringify(onboarded)); }, [onboarded]);
+  useEffect(() => { if (session) localStorage.setItem('w_session', JSON.stringify(session)); else localStorage.removeItem('w_session'); }, [session]);
   useEffect(() => { localStorage.setItem("w5_e",  JSON.stringify(entries)); }, [entries]);
   useEffect(() => { localStorage.setItem("w5_xp", JSON.stringify(xp));      }, [xp]);
   useEffect(() => { localStorage.setItem("w5_b",  JSON.stringify(badges));  }, [badges]);
@@ -546,6 +557,8 @@ export default function Winn() {
     setConfetti(n => n + 1);
     setTimeout(() => setFreshId(null), 700);
     if (msg && wasFirstToday) setTimeout(() => toast_(msg), 2800);
+    // Push to Supabase if logged in
+    pushEntry(entry);
   };
 
   const addSuccess = () => {
@@ -620,6 +633,132 @@ export default function Winn() {
     toast_('Bienvenue sur Winn. ✦');
   };
 
+  // ── Auth ──────────────────────────────────────────────────────
+  const handleSignUp = async () => {
+    if (!authEmail.trim() || !authPass.trim() || !authName.trim()) {
+      setAuthError('Remplis tous les champs'); return;
+    }
+    setAuthLoading(true); setAuthError('');
+    const res = await sb.signUp(authEmail.trim(), authPass.trim(), authName.trim());
+    if (res.error) { setAuthError(res.error.message); setAuthLoading(false); return; }
+    if (res.access_token) {
+      setSession(res);
+      // Update profile name
+      await sb.withAuth(res.access_token).update('profiles', { name: authName.trim(), avatar: authName.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) }, `id=eq.${res.user.id}`);
+    } else {
+      setAuthError('Vérifie ton email pour confirmer ton compte');
+    }
+    setAuthLoading(false);
+  };
+
+  const handleSignIn = async () => {
+    if (!authEmail.trim() || !authPass.trim()) { setAuthError('Remplis tous les champs'); return; }
+    setAuthLoading(true); setAuthError('');
+    const res = await sb.signIn(authEmail.trim(), authPass.trim());
+    if (res.error) { setAuthError(res.error.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : res.error.message); setAuthLoading(false); return; }
+    setSession(res);
+    setAuthLoading(false);
+  };
+
+  const handleSignOut = async () => {
+    if (session?.access_token) await sb.signOut(session.access_token);
+    setSession(null); setProfile(null); setEntries([]);
+  };
+
+  // ── Sync entries from/to Supabase ─────────────────────────────
+  const syncEntries = useCallback(async () => {
+    if (!session?.access_token || !session?.user?.id) return;
+    setSyncLoading(true);
+    try {
+      const data = await sb.withAuth(session.access_token).query('entries', `?user_id=eq.${session.user.id}&order=created_at.desc`);
+      if (Array.isArray(data)) {
+        const mapped = data.map(e => ({
+          id: new Date(e.created_at).getTime(),
+          supaId: e.id,
+          type: e.type, text: e.text, original: e.original,
+          cat: e.cat, isPublic: e.is_public, xp: e.xp,
+          date: new Date(e.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+        }));
+        setEntries(mapped);
+      }
+      // Sync profile
+      const profiles = await sb.withAuth(session.access_token).query('profiles', `?id=eq.${session.user.id}`);
+      if (Array.isArray(profiles) && profiles.length > 0) {
+        const p = profiles[0];
+        setProfile({ name: p.name, bio: p.bio, avatar: p.avatar });
+        setXp(p.xp || 0);
+        setBadges(p.badges || []);
+      }
+    } catch(e) { console.error('Sync error:', e); }
+    setSyncLoading(false);
+  }, [session]);
+
+  useEffect(() => { if (session) syncEntries(); }, [session]);
+
+  const pushEntry = async (entry) => {
+    if (!session?.access_token) return;
+    try {
+      await sb.withAuth(session.access_token).insert('entries', {
+        user_id: session.user.id,
+        type: entry.type, text: entry.text,
+        original: entry.original || '',
+        cat: entry.cat, is_public: entry.isPublic, xp: entry.xp,
+      });
+      // Update XP on profile
+      await sb.withAuth(session.access_token).update('profiles',
+        { xp: xp + entry.xp },
+        `id=eq.${session.user.id}`
+      );
+    } catch(e) { console.error('Push error:', e); }
+  };
+
+  // Load public feed from Supabase
+  const loadFeed = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const data = await sb.withAuth(session.access_token).query(
+        'entries',
+        `?is_public=eq.true&order=created_at.desc&limit=20`
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        const withAuthors = await Promise.all(data.map(async e => {
+          const profiles = await sb.withAuth(session.access_token).query('profiles', `?id=eq.${e.user_id}`);
+          const author = Array.isArray(profiles) && profiles[0] ? profiles[0] : { name: 'Anonyme', avatar: '??' };
+          const reacts = await sb.withAuth(session.access_token).query('reactions', `?entry_id=eq.${e.id}`);
+          const comms  = await sb.withAuth(session.access_token).query('comments',  `?entry_id=eq.${e.id}&order=created_at.asc`);
+          const reactions = { strength: 0, spark: 0, heart: 0 };
+          if (Array.isArray(reacts)) reacts.forEach(r => { reactions[r.type] = (reactions[r.type]||0)+1; });
+          return {
+            id: e.id, supaId: e.id,
+            author: author.name, avatar: author.avatar || author.name.slice(0,2).toUpperCase(),
+            color: T.accent, level: '',
+            type: e.type, text: e.text, original: e.original,
+            date: new Date(e.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+            reactions,
+            comments: Array.isArray(comms) ? comms.map(c => ({ a: c.user_id === session.user.id ? 'Moi' : author.name, t: c.text, time: new Date(c.created_at).toLocaleDateString('fr-FR') })) : [],
+          };
+        }));
+        setFeed(withAuthors.filter(e => e.author));
+      }
+    } catch(e) { console.error('Feed error:', e); }
+  }, [session]);
+
+  useEffect(() => { if (session) loadFeed(); }, [session]);
+
+  const pushReaction = async (entryId, type) => {
+    if (!session?.access_token) return;
+    await sb.withAuth(session.access_token).insert('reactions', {
+      entry_id: entryId, user_id: session.user.id, type,
+    }).catch(() => {});
+  };
+
+  const pushComment = async (entryId, text) => {
+    if (!session?.access_token) return;
+    await sb.withAuth(session.access_token).insert('comments', {
+      entry_id: entryId, user_id: session.user.id, text,
+    }).catch(() => {});
+  };
+
   const callPortrait = async () => {
     if (entries.length < 3) { toast_('Ajoute au moins 3 entrées pour générer ton portrait'); return; }
     setPortraitStep(1);
@@ -660,8 +799,15 @@ export default function Winn() {
     }
   };
 
-  const react   = (id, rid) => { setFeed(f => f.map(i => i.id !== id ? i : { ...i, reactions: { ...i.reactions, [rid]: i.reactions[rid] + 1 } })); toast_("Réaction envoyée"); };
-  const comment = (id, txt) => { setFeed(f => f.map(i => i.id !== id ? i : { ...i, comments: [...i.comments, { a: "Moi", t: txt, time: "À l'instant" }] })); };
+  const react = (id, rid) => {
+    setFeed(f => f.map(i => i.id !== id ? i : { ...i, reactions: { ...i.reactions, [rid]: (i.reactions[rid]||0) + 1 } }));
+    toast_("Réaction envoyée");
+    pushReaction(id, rid);
+  };
+  const comment = (id, txt) => {
+    setFeed(f => f.map(i => i.id !== id ? i : { ...i, comments: [...i.comments, { a: "Moi", t: txt, time: "À l'instant" }] }));
+    pushComment(id, txt);
+  };
 
   const level = getLevel(xp);
   const todayQuote  = QUOTES[new Date().getDate() % QUOTES.length];
@@ -685,6 +831,59 @@ export default function Winn() {
 
   const successCount  = entries.filter(e => e.type === "success").length;
   const transformCount = entries.filter(e => e.type === "transform").length;
+
+  // ── Auth screen ───────────────────────────────────────────────
+  if (!session) return (
+    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'DM Sans',sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px" }}>
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 36, color: T.text, letterSpacing: "-.5px" }}>
+            Winn<span style={{ color: T.accent }}>.</span>
+          </div>
+          <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>Célèbre chaque victoire. Transforme chaque épreuve.</div>
+        </div>
+
+        {/* Tab switcher */}
+        <div style={{ display: "flex", background: T.soft, borderRadius: 14, padding: 4, marginBottom: 24, gap: 4 }}>
+          {[{id:'login',label:'Se connecter'},{id:'signup',label:"S'inscrire"}].map(t => (
+            <button key={t.id} onClick={() => { setAuthView(t.id); setAuthError(''); }} style={{
+              flex: 1, padding: "10px", borderRadius: 11, border: "none", cursor: "pointer",
+              fontFamily: "'DM Sans',sans-serif", fontWeight: 600, fontSize: 13,
+              background: authView === t.id ? T.card : "transparent",
+              color: authView === t.id ? T.text : T.muted,
+              boxShadow: authView === t.id ? "0 1px 6px rgba(0,0,0,.07)" : "none",
+              transition: "all .2s",
+            }}>{t.label}</button>
+          ))}
+        </div>
+
+        {authView === 'signup' && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 600, color: T.mid, letterSpacing: ".04em", marginBottom: 8 }}>TON PRÉNOM</div>
+            <input type="text" placeholder="Sophie M." value={authName} onChange={e => setAuthName(e.target.value)} style={{ marginBottom: 14, borderRadius: 14, padding: "13px 15px", height: "auto" }} />
+          </>
+        )}
+
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.mid, letterSpacing: ".04em", marginBottom: 8 }}>EMAIL</div>
+        <input type="text" placeholder="ton@email.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} style={{ marginBottom: 14, borderRadius: 14, padding: "13px 15px", height: "auto" }} onKeyDown={e => { if(e.key==="Enter") authView==='login' ? handleSignIn() : handleSignUp(); }} />
+
+        <div style={{ fontSize: 11, fontWeight: 600, color: T.mid, letterSpacing: ".04em", marginBottom: 8 }}>MOT DE PASSE</div>
+        <input type="text" placeholder="••••••••" value={authPass} onChange={e => setAuthPass(e.target.value)} style={{ marginBottom: authError ? 12 : 24, borderRadius: 14, padding: "13px 15px", height: "auto" }} onKeyDown={e => { if(e.key==="Enter") authView==='login' ? handleSignIn() : handleSignUp(); }} />
+
+        {authError && <div style={{ fontSize: 13, color: T.rose, marginBottom: 16, textAlign: "center" }}>{authError}</div>}
+
+        <button className="btn btn-dark" onClick={authView === 'login' ? handleSignIn : handleSignUp}
+          style={{ width: "100%", padding: "16px", fontSize: 15, opacity: authLoading ? 0.6 : 1 }}
+          disabled={authLoading}>
+          {authLoading ? "Chargement…" : authView === 'login' ? "Se connecter ✦" : "Créer mon compte ✦"}
+        </button>
+
+        <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginTop: 20, lineHeight: 1.6 }}>
+          Tes données sont privées et sécurisées.<br />Tu choisis ce que tu partages.
+        </div>
+      </div>
+    </div>
+  );
 
   if (!onboarded) return <Onboarding onDone={() => setOnboarded(true)} />;
   if (!profile) return (
@@ -1389,6 +1588,15 @@ export default function Winn() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Sign out */}
+                  <button onClick={handleSignOut} style={{
+                    background: "none", border: `1px solid ${T.border}`, borderRadius: 40,
+                    padding: "8px 18px", fontSize: 12, color: T.muted, cursor: "pointer",
+                    fontFamily: "'DM Sans',sans-serif", marginBottom: 14,
+                  }}>
+                    Se déconnecter
+                  </button>
 
                   {/* Invite */}
                   <button onClick={() => setShowInvite(true)} style={{
